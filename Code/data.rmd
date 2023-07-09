@@ -26,6 +26,7 @@ rates_1st <- aggregate(MORTGAGE30US ~ month + year, rates, FUN = function(x) x[1
 
 head(rates_1st)
 ```
+
 ```{r}
 cpi <- read.csv('cpi.csv', header=TRUE)
 
@@ -136,6 +137,8 @@ plot(T1_mortgage_cpi$date, T1_mortgage_cpi$cpi, type="l", xlab="Date", ylab="CPI
 plot(T1_mortgage_cpi_listings$date, T1_mortgage_cpi_listings$ACTLISCOUUS, type="l", xlab="Date", ylab="Active Listings", main="Active Listings")
 ```
 
+## The 'final_sorted' data set has 80 NA's in the population field becuase of missing data for 2023 Jan - May.
+
 ```{r}
 #combine mortgage rates, cpi, active listings and counties
 combined_data <- merge(T1_mortgage_cpi_listings, county_list, by=NULL)
@@ -152,10 +155,134 @@ final <- combined_data_pop %>%
 #select relevant fields
 final <- final %>% select(ID, STATE, COUNTY, STNAME, CTYNAME, date, year, month, MORTGAGE30US, cpi, ACTLISCOUUS, pop, value)
 
+#sort by date and filter only data points where active listings data exists (everything after June 2016)
 final_sorted <- final %>%
-  arrange(ID, date)
+  arrange(ID, date) %>%
+  filter(date >= "2016-07-01")
 
 final_sorted
 summary(final_sorted)
 ```
 
+```{r}
+# install DAAG package
+library(DAAG)
+
+# set seed
+set.seed(42)
+
+# split dataset into train, validate, test proportions
+train_prop <- .6
+validate_prop <- .2
+
+# sample the data set
+rand_indices <- sample(1:nrow(final_sorted))
+
+# calculate how many records for each split
+n_train <- round(train_prop * nrow(final_sorted))
+n_validate <- round(validate_prop * nrow(final_sorted))
+n_test <- nrow(final_sorted) - n_train - n_validate
+
+# determine the subsets
+train_set <- final_sorted[rand_indices[1:n_train], ]
+validate_set <- final_sorted[rand_indices[(n_train + 1):(n_train + n_validate)], ]
+test_set <- final_sorted[rand_indices[(n_train + n_validate + 1):nrow(final_sorted)], ]
+```
+
+```{r}
+# build linear regession models
+lm_rates <- lm(value ~ MORTGAGE30US + CTYNAME, data=train_set)
+lm_cpi <- lm(value ~ cpi + CTYNAME, data=train_set)
+lm_listings <- lm(value ~ ACTLISCOUUS + CTYNAME, data=train_set)
+lm_pop <- lm(value ~ pop + CTYNAME, data=train_set)
+lm_all <- lm(value ~ MORTGAGE30US + cpi + ACTLISCOUUS + pop + CTYNAME, data=train_set)
+
+# review training summaries
+summary(lm_rates)
+summary(lm_cpi)
+summary(lm_listings)
+summary(lm_pop)
+summary(lm_all)
+```
+
+```{r}
+# for top 3 adjusted R-square, run validation sets and compare
+
+# cpi val
+lm_cpi_pred <- predict(lm_cpi, newdata = validate_set)
+plot(validate_set$value, lm_cpi_pred, xlab='Actual', ylab='Pred', main='CPI, val set')
+
+# listings val
+lm_listings_pred <- predict(lm_listings, newdata = validate_set)
+plot(validate_set$value, lm_listings_pred, xlab='Actual', ylab='Pred', main='Listings, val set')
+
+# all val
+lm_all_pred <- predict(lm_all, newdata = validate_set)
+plot(validate_set$value, lm_all_pred, xlab='Actual', ylab='Pred', main='All, val set')
+```
+
+```{r}
+# find the root mean square errors
+lm_cpi_pred_rmse <- sqrt(mean((lm_cpi_pred - validate_set$value)^2, na.rm=TRUE))
+lm_listings_pred_rmse <- sqrt(mean((lm_listings_pred - validate_set$value)^2, na.rm=TRUE))
+lm_all_pred_rmse <- sqrt(mean((lm_all_pred - validate_set$value)^2, na.rm=TRUE))
+
+sprintf('rmse of cpi validation set is %s', round(lm_cpi_pred_rmse, 2))
+sprintf('rmse of listings validation set is %s', round(lm_listings_pred_rmse, 2))
+sprintf('rmse of all validation set is %s', round(lm_all_pred_rmse, 2))
+```
+
+```{r}
+# run final model with best fit using the test data
+lm_all_test <- predict(lm_all, newdata = test_set)
+plot(test_set$value, lm_all_test, xlab='Actual', ylab='Pred', main='All, test set')
+lm_all_test_rmse <- sqrt(mean((lm_all_test - test_set$value)^2, na.rm=TRUE))
+sprintf('rmse of all test set is %s', round(lm_all_test_rmse, 2))
+
+```
+
+## Plot of residuals vs predicted values shows heteroscedasticity.
+
+## Relationship is non-linear -\> explore other models
+
+```{r}
+# Plot residuals vs predicted values
+
+predicted_all <- lm_all$fitted.values
+residuals <- lm_all$residuals
+plot(predicted_all, residuals,
+     main = "Res vs. Pred Values",
+     xlab = "Predicted Values",
+     ylab = "Residuals")
+abline(h=0, lty=2)
+```
+
+## Transforming the dependent variable using 'log(value)' normalizes the residuals vs predicted values plot.
+
+```{r}
+# Test log-linear model
+lm_log_all <- lm(log(value) ~ MORTGAGE30US + cpi + ACTLISCOUUS + pop + CTYNAME, data=train_set)
+summary(lm_log_all)
+
+predicted_log_all <- lm_log_all$fitted.values
+residuals_log <- lm_log_all$residuals
+plot(predicted_log_all, residuals_log,
+     main = "Res vs. Pred Values",
+     xlab = "Predicted Values",
+     ylab = "Residuals")
+abline(h=0, lty=2)
+```
+
+## Looking at the correlation matrix mortgage rate and cpi are highly correlated while active listings and cpi are negatively correlated.
+
+```{r}
+# plot correlation matrix
+
+library(corrplot)
+cor_matrix <- cor(train_set[, c("MORTGAGE30US", "cpi", "ACTLISCOUUS", "pop")])
+corrplot(cor_matrix, method = "color")
+```
+
+```{r}
+
+```
