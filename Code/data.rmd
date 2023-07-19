@@ -160,6 +160,9 @@ final_sorted <- final %>%
   arrange(ID, date) %>%
   filter(date >= "2016-07-01")
 
+removed_records <- final_sorted[!complete.cases(final_sorted), ]  
+final_sorted <- final_sorted[complete.cases(final_sorted), ]
+
 final_sorted
 summary(final_sorted)
 ```
@@ -284,5 +287,64 @@ corrplot(cor_matrix, method = "color")
 ```
 
 ```{r}
+
+# load packages
+library(randomForest)
+library(scales)
+
+# build using R package randomForest; set mtry
+rf_all <- randomForest(value ~ MORTGAGE30US + cpi + ACTLISCOUUS + pop + CTYNAME, data=train_set, importance=TRUE, mtry=5)
+
+# review rf model
+summary(rf_all)
+round(importance(rf_all), 2)
+varImpPlot(rf_all)
+
+# predict against validation set
+rf_all_pred <- predict(rf_all, newdata = test_set)
+rf_all_pred_df <- data.frame(county = test_set$CTYNAME, actual = test_set$value, predicted = rf_all_pred)
+
+# calculate difference between predict and actuals
+rf_all_pred_df$diff <- rf_all_pred_df$predicted - rf_all_pred_df$actual
+rf_all_pred_df$diff_is_pos <- if_else(rf_all_pred_df$diff >= 0, TRUE, FALSE)
+
+# group by county
+rf_all_pred_group <- rf_all_pred_df %>%
+  group_by(rf_all_pred_df$county) %>%
+  summarize(
+    count = n(),
+    mean_value = mean(diff),
+    median_value = median(diff),
+    min_value = min(diff),
+    max_value = max(diff),
+    pred_over = sum(diff_is_pos),
+    pred_under = count - sum(diff_is_pos)
+    )
+
+# sort groups by median values
+rf_all_pred_group_sort <- arrange(rf_all_pred_group, desc(median_value))
+
+# review data
+rf_all_pred_df_summary <- summary(rf_all_pred_df)
+rf_all_pred_df_summary
+rf_all_pred_group_sort
+
+# plot predictions
+ggplot(rf_all_pred_df, aes(x = actual, y = predicted, color = as.logical(diff_is_pos))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Actual", y = "Predicted", title = "Predicted vs Actual", color = "Prediction over/under") +
+  theme_bw() #+ facet_wrap(~ county, ncol = 4)
+
+# plot predictions by county
+ggplot(rf_all_pred_df, aes(x = actual, y = predicted, color = as.logical(diff_is_pos))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Actual", y = "Predicted", title = "Predicted vs Actual", color = "Prediction over/under") +
+  theme_bw() + 
+  facet_wrap(~ county, ncol = 4) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ```
