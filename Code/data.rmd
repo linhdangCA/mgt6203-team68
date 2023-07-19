@@ -305,6 +305,9 @@ varImpPlot(rf_all)
 rf_all_pred <- predict(rf_all, newdata = test_set)
 rf_all_pred_df <- data.frame(state = test_set$STNAME, date = test_set$date, county = test_set$CTYNAME, actual = test_set$value, predicted = rf_all_pred)
 
+# get rmse
+rf_rmse <- sqrt(mean((rf_all_pred - test_set$value)^2))
+
 # calculate difference between predict and actuals
 rf_all_pred_df$diff <- rf_all_pred_df$predicted - rf_all_pred_df$actual
 rf_all_pred_df$diff_is_pos <- if_else(rf_all_pred_df$diff >= 0, TRUE, FALSE)
@@ -314,6 +317,7 @@ ggplot(rf_all_pred_df, aes(x = date)) +
   geom_line(aes(y = actual, color = "Actual")) +
   geom_line(aes(y = predicted, color = "Predicted", linetype = "Predicted"), linetype = "dashed") +
   labs(x = "Date", y = "Value", title = "Predicted vs Actual") +
+  scale_y_continuous(labels = scales::comma) +
   scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red"), labels = c("Actual", "Predicted")) +
   scale_linetype_manual(values = c("Predicted" = "dashed"), labels = "Predicted") +
   theme_bw() +
@@ -346,6 +350,7 @@ ggplot(rf_all_pred_df, aes(x = actual, y = predicted, color = as.logical(diff_is
   geom_point() +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
   scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
   labs(x = "Actual", y = "Predicted", title = "Predicted vs Actual", color = "Prediction over/under") +
   theme_bw()
 
@@ -354,6 +359,7 @@ ggplot(rf_all_pred_df, aes(x = actual, y = predicted, color = as.logical(diff_is
   geom_point() +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
   scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
   labs(x = "Actual", y = "Predicted", title = "Predicted vs Actual", color = "Prediction over/under") +
   theme_bw() + 
   facet_wrap(~ county, ncol = 4) +
