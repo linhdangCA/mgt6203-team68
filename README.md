@@ -11,7 +11,7 @@ Members:
 
 ### Getting started
 
-Review final deliverables:
+Reviewing the final deliverables:
 1. Here's the youtube link for the final presentation: https://www.youtube.com/watch?v=zmfqZrTHKz4
 2. Find the final report and presentation slides in their respective folders.
 
