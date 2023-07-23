@@ -287,6 +287,63 @@ corrplot(cor_matrix, method = "color")
 ```
 
 ```{r}
+library(ggplot2)
+lm_pred <- predict(lm_log_all,newdata = test_set)
+lm_pred_df <- data.frame(state = test_set$STNAME, date = test_set$date, county = test_set$CTYNAME, actual = log(test_set$value), predicted = lm_pred)
+head(lm_pred_df)
+
+# plot predicted value and actual value
+ggplot(lm_pred_df, aes(x = date)) +
+  geom_line(aes(y = actual, color = "Actual"),linetype = "solid", size = 0.5) +
+  geom_line(aes(y = predicted, color = "Predicted", linetype = "Predicted"), linetype = "dashed", size = 0.5) +
+  labs(x = "Date", y = "Value (Log)", title = "Linear Regression - Predicted vs Actual") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red"), labels = c("Actual", "Predicted")) +
+  scale_linetype_manual(values = c("Predicted" = "dashed"), labels = "Predicted") +
+  theme_bw() +
+  facet_wrap(~ county, ncol = 4) +
+  theme(legend.position = "right")
+```
+
+```{r}
+# Create variance column of predicted and actual
+lm_pred_df$diff <- lm_pred_df$predicted - lm_pred_df$actual
+lm_pred_df$diff_is_pos <- if_else(lm_pred_df$diff >= 0, TRUE, FALSE)
+head(lm_pred_df)
+
+## Filter results to 2021 onwards to get latest 
+lm_pred_df_filtered <- lm_pred_df %>%
+  filter(date >= as.Date("2021-01-01"))
+
+# Plot County diff
+ggplot(lm_pred_df_filtered, aes(x = actual, y = predicted, color = as.logical(diff_is_pos))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  labs(x = "Actual", y = "Predicted", title = "Linear Regression - Predicted vs Actual (2021 Onwards)", color = "Prediction over/under") +
+  theme_bw() + 
+  facet_wrap(~ county, ncol = 4) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+# Create county summary table
+lm_pred_group <- lm_pred_df_filtered %>%
+  group_by(lm_pred_df_filtered$county) %>%
+  summarize(
+    count = n(),
+    mean_value = mean(diff),
+    median_value = median(diff),
+    min_value = min(diff),
+    max_value = max(diff),
+    pred_over = sum(diff_is_pos),
+    pred_under = count - sum(diff_is_pos)
+  )
+lm_pred_group
+```
+
+```{r}
 
 # load packages
 library(randomForest)
