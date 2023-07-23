@@ -3,13 +3,26 @@ title: "Housing Data"
 output: html_notebook
 ---
 
+# Load required libraries
+
 ```{r}
 library(dplyr)
 library(tidyr)
 library(stringr)
 library(reshape2)
 library(lubridate)
+library(DAAG)
+library(corrplot)
+library(ggplot2)
+library(randomForest)
+library(scales)
+library(forecast)
+
 ```
+
+# Prepare the data
+
+## Ingest, cleanse, and merge data sets
 
 ```{r}
 rates <- read.csv('mortgage_rate.csv', header=TRUE)
@@ -167,9 +180,9 @@ final_sorted
 summary(final_sorted)
 ```
 
+# Split data into train, validation, test sets.
+
 ```{r}
-# install DAAG package
-library(DAAG)
 
 # set seed
 set.seed(42)
@@ -281,13 +294,14 @@ abline(h=0, lty=2)
 ```{r}
 # plot correlation matrix
 
-library(corrplot)
 cor_matrix <- cor(train_set[, c("MORTGAGE30US", "cpi", "ACTLISCOUUS", "pop")])
 corrplot(cor_matrix, method = "color")
 ```
 
+# Linear Regression Model
+
 ```{r}
-library(ggplot2)
+
 lm_pred <- predict(lm_log_all,newdata = test_set)
 lm_pred_df <- data.frame(state = test_set$STNAME, date = test_set$date, county = test_set$CTYNAME, actual = log(test_set$value), predicted = lm_pred)
 head(lm_pred_df)
@@ -343,11 +357,11 @@ lm_pred_group <- lm_pred_df_filtered %>%
 lm_pred_group
 ```
 
-```{r}
+# Random Forest Model
 
-# load packages
-library(randomForest)
-library(scales)
+# use built-in Random Forest function in R. Segment into counties and measure RMSE for model comparison.
+
+```{r}
 
 # build using R package randomForest; set mtry
 rf_all <- randomForest(value ~ MORTGAGE30US + cpi + ACTLISCOUUS + pop + CTYNAME, data=train_set, importance=TRUE, mtry=5)
@@ -422,4 +436,159 @@ ggplot(rf_all_pred_df, aes(x = actual, y = predicted, color = as.logical(diff_is
   facet_wrap(~ county, ncol = 4) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
+```
+
+```{r}
+# create random forest models for each county to compare RMSE with ARIMA models
+rf_list <- split(train_set, train_set$CTYNAME)
+
+rf_models <- lapply(rf_list, function(x) {
+  rf_model <- randomForest(value ~ MORTGAGE30US + cpi + ACTLISCOUUS + pop, data=x)
+    return(rf_model)
+  })
+
+# RMSE of random forest models for each county
+
+rf_rmse_df <- data.frame()
+
+for(i in seq_along(rf_models)) {
+  model <- rf_models[[i]]
+  
+  data <- rf_list[[i]]
+  
+  predictions <- predict(model, newdata = data)
+  
+  residuals <- predictions - data$value
+  
+  rf_rmse <- sqrt(mean(residuals^2))
+  
+  county_rmse <- data.frame(
+    county = names(rf_models)[i],
+    rmse = rf_rmse
+  )
+  
+  rf_rmse_df <- rbind(rf_rmse_df, county_rmse)
+}
+
+print(rf_rmse_df)
+```
+
+# ARIMA Model
+
+## First we will have to forecast the population data for the first 5 months of 2023. Once the forecasted population data is appended to the original data, we can create ARIMA models with exogenous variables for each of the 16 counties. The forecasted results will then be compared with the Random Forest model using RMSE.
+
+```{r}
+
+# forecast population data for 2023
+
+counties <- unique(final$CTYNAME)
+
+pop_models <- list()
+
+for (county in counties) {
+  df_county <- subset(final, CTYNAME == county)
+  
+  pop_ts <- ts(df_county$pop, start = c(2009, 8), frequency = 12)
+  
+  pop_models[[county]] <- auto.arima(pop_ts)
+}
+
+pop_forecasts <- list()
+pop_forecasts_df <- data.frame()
+
+for (county in names(pop_models)) {
+  model <- pop_models[[county]]
+  
+  forecast <- forecast(model, h = 5)
+  
+  pop_forecasts[[county]] <- forecast
+  
+  forecast_df <- data.frame(
+    date = seq(as.Date("2023-01-01"), by = "month", length.out =5),
+    CTYNAME = county,
+    pop = forecast
+  )
+  
+  pop_forecasts_df <- rbind(pop_forecasts_df, forecast_df)
+}
+
+# rename population forecast to "pop"
+colnames(pop_forecasts_df)[3] = "pop"
+
+# format "pop" as integer
+pop_forecasts_df$pop <- as.integer(pop_forecasts_df$pop)
+
+# remove extraneous columns
+pop_forecasts_df <- select(pop_forecasts_df, -c(pop.Lo.80,pop.Hi.80,pop.Lo.95,pop.Hi.95
+))
+```
+
+```{r}
+# combine forecasted population data with original data set
+
+final_sorted_2023 <- final %>%
+  arrange(ID, date) %>%
+  filter(date >= "2016-07-01")
+
+final_2023 <- merge(final_sorted_2023, pop_forecasts_df, by=c("date", "CTYNAME"), all=TRUE)
+
+# filter by 2023 dates for forecasting
+final_2023 <- final_2023 %>%
+  mutate(pop = coalesce(pop.x, pop.y)) %>%
+  select(-pop.x, -pop.y) %>%
+  filter(date >= "2023-01-01")
+```
+
+```{r}
+# fit ARIMA model for each county
+
+counties <- unique(final_sorted$CTYNAME)
+
+models <- list()
+
+for (county in counties) {
+  df_county <- subset(final_sorted, CTYNAME == county)
+  
+  price_ts <- ts(df_county$value, frequency = 12, start = c(2016, 7))
+  
+  xreg <- cbind(df_county$MORTGAGE30US, df_county$cpi, df_county$pop, df_county$ACTLISCOUUS)
+
+  models[[county]] <- auto.arima(price_ts, xreg = xreg)
+}
+
+#models
+
+# forecast ARIMA models
+
+forecasts_arima <- list()
+
+df_rmse <- data.frame()
+
+for (county in names(models)) {
+  model <- models[[county]]
+  
+  df_future_county <- subset(final_2023, CTYNAME == county)
+  
+  xreg_future <- cbind(df_future_county$MORTGAGE30US, df_future_county$cpi, df_future_county$pop, df_future_county$ACTLISCOUUS)
+  
+  forecast <- forecast(model, h = 5, xreg = xreg_future)
+  
+  forecasts_arima[[county]] <- forecast
+  
+  # calculate rmse for each county
+  
+  rmse = sqrt(mean((df_future_county$value - forecast$mean)^2))
+  
+  df_rmse <- rbind(df_rmse, data.frame(County = county, RMSE = rmse))
+}
+
+df_rmse
+```
+
+```{r}
+# plot arima models
+
+for (county in names(forecasts_arima)) {
+  plot(forecasts_arima[[county]])
+  }
 ```
