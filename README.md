@@ -3,7 +3,7 @@ Team 68's group project GitHub repository for MGT 6203 (Canvas) Summer of 2023 s
 
 Project Title: Analyzing the Impact of Macroeconomic Factors on Real Estate: A Study of CPI, Interest Rates, and Home Inventory
 
-## Members:
+Members:
 1. Nihar Reddy Moramganti
 2. Yuchen Hu
 3. Michael Cardenas
