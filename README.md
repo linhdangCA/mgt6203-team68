@@ -9,15 +9,15 @@ Members:
 3. Michael Cardenas
 4. Linh Dang
 
-## Getting started
+### Getting started
 
-### Final deliverables
+Review final deliverables:
 1. Here's the youtube link for the final presentation: https://www.youtube.com/watch?v=zmfqZrTHKz4
 2. Find the final report and presentation slides in their respective folders.
 
-### Building the models
+Building the models:
 1. Go to dropbox link in the data folder and download the raw data files.
 2. Use the code base from the Final Code folder to build the models, including: ARIMA, Linear Regression, and Random Forest.
 
-### Proposal presentation
+Proposal presentation:
 1. Link to proposal presentation: https://youtu.be/pjaqWJ5TLO0
