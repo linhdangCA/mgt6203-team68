@@ -1,13 +1,24 @@
 # Team-68
 Team 68's group project GitHub repository for MGT 6203 (Canvas) Summer of 2023 semester.
 
-Members:
+## Members:
 1. Nihar Reddy Moramganti
 2. Yuchen Hu
 3. Michael Cardenas
 4. Linh Dang
 
-Data repository link: https://www.dropbox.com/scl/fo/n2syibf9shoyndftqc9pu/h?rlkey=s8a9c78zds6vms7b15zmrp0hf&dl=0
 
 Project Title: Analyzing the Impact of Macroeconomic Factors on Real Estate: A Study of CPI, Interest Rates, and Home Inventory
 
+## Getting started
+
+### Final deliverables
+1. Here's the youtube link for the final video presentation: https://www.youtube.com/watch?v=zmfqZrTHKz4
+2. Find the final report and presentation slides in their respective folders.
+
+### Building the models
+1. Go to dropbox link in the data folder and download the raw data files.
+2. Use the code base from the Final Code folder to build the models, including: ARIMA, Linear Regression, and Random Forest.
+
+### Proposal presentation
+1. Link to proposal presentation: https://youtu.be/pjaqWJ5TLO0
