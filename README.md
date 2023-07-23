@@ -17,7 +17,7 @@ Reviewing the final deliverables:
 
 Building the models:
 1. Go to dropbox link in the data folder and download the raw data files.
-2. Use the code base from the Final Code folder to build the models, including: ARIMA, Linear Regression, and Random Forest.
+2. Run the R code base 'code_final.rmd' located in the Final Code folder.
 
 Proposal presentation:
 1. Link to proposal presentation: https://youtu.be/pjaqWJ5TLO0
